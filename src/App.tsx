@@ -104,11 +104,18 @@ export default function PortuGeezaApp() {
     if (!saved) return DEFAULT_PHRASE_DATA;
     try {
       const parsed = JSON.parse(saved);
-      // Ensure all items have a createdAt timestamp
-      return parsed.map(item => ({
-        ...item,
-        createdAt: item.createdAt || NOW - (30 * ONE_DAY_MS)
-      }));
+      
+      // Merge missing default phrases/categories into saved storage
+      const existingIds = new Set(parsed.map(item => item.id));
+      const newDefaults = DEFAULT_PHRASE_DATA.filter(item => !existingIds.has(item.id));
+
+      return [
+        ...parsed.map(item => ({
+          ...item,
+          createdAt: item.createdAt || NOW - (30 * ONE_DAY_MS)
+        })),
+        ...newDefaults
+      ];
     } catch (e) {
       return DEFAULT_PHRASE_DATA;
     }
