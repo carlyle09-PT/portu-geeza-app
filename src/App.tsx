@@ -315,7 +315,7 @@ export default function PortuGeezaApp() {
         reader.readAsDataURL(file);
       });
 
-      const apiKey = "";
+      const apiKey = "AQ.Ab8RN6Ia5Oa-qeaoluoGnkbNCOWnU-5PvngNCobNXK-gdhDWTQ";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
       const promptText = `Analyze this screenshot from a translation or language learning app. 
