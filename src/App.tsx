@@ -43,7 +43,7 @@ const DEFAULT_PHRASE_DATA = [
   // CAFÉ
   { id: 1, category: 'Café', pt: 'Quero comprar um gelado.', en: 'I want to buy an ice cream.', level: 'Easy', verb: 'Comprar', verbEn: 'To buy', createdAt: NOW - (30 * ONE_DAY_MS) },
   { id: 2, category: 'Café', pt: 'Podes dar-me a ementa?', en: 'Can you give me the menu?', level: 'Easy', verb: 'Dar', verbEn: 'To give', createdAt: NOW - (30 * ONE_DAY_MS) },
-  { id: 3, category: 'Café', pt: 'Quero comprar um gelado porque está muito calor na praia.', en: 'I want to buy an ice cream because it is very hot at the beach.', level: 'Intermediate', verb: 'Comprar', verbEn: 'To buy', createdAt: NOW - (30 * ONE_DAY_MS) },
+  { id: 3, category: 'Café', pt: 'Quero comprar um gelado porque está muito calor na praia.', en: 'I want to buy an ice cream porque it is very hot at the beach.', level: 'Intermediate', verb: 'Comprar', verbEn: 'To buy', createdAt: NOW - (30 * ONE_DAY_MS) },
   { id: 4, category: 'Café', pt: 'Tens tempo para tomar um café agora ou estás com pressa?', en: 'Do you have time to have a coffee now or are you in a hurry?', level: 'Intermediate', verb: 'Ter', verbEn: 'To have', createdAt: NOW - (30 * ONE_DAY_MS) },
   
   // BEACH
@@ -401,13 +401,13 @@ Do NOT include markdown block formatting or backticks.`;
               </>
             ) : (
               <>
-                <Camera size={22} /> Upload Screenshot from App
+                <Camera size={22} /> Upload Screenshot
               </>
             )}
+            {/* Removed capture="environment" to allow choosing existing files */}
             <input 
               type="file" 
               accept="image/*" 
-              capture="environment"
               onChange={handleScreenshotUpload} 
               disabled={isAnalyzingImage}
               className="hidden" 
