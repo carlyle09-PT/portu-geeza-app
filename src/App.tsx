@@ -5,16 +5,12 @@ import {
   Dumbbell, 
   Palmtree, 
   Utensils, 
-  MapPin, 
   Shuffle, 
   ChevronLeft, 
   ChevronRight, 
   RotateCcw,
   Languages,
   Info,
-  Upload,
-  RefreshCw,
-  FolderPlus,
   Volume2,
   ShoppingBag,
   HelpCircle,
@@ -22,17 +18,23 @@ import {
   PlusCircle,
   Sparkles,
   History,
-  Clock,
   X,
-  Download,
   BookOpen,
-  Check
+  Check,
+  Calendar,
+  Camera,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = Date.now();
 
 const DEFAULT_PHRASE_DATA = [
+  // WEDNESDAY CATEGORY
+  { id: 201, category: 'Wednesday', pt: 'Tenho a aula de português às quartas-feiras.', en: 'I have Portuguese class on Wednesdays.', level: 'Intermediate', verb: 'Ter', verbEn: 'To have', createdAt: NOW - (1 * ONE_DAY_MS) },
+  { id: 202, category: 'Wednesday', pt: 'Quero rever os meus apontamentos antes da aula.', en: 'I want to review my notes before class.', level: 'Intermediate', verb: 'Rever', verbEn: 'To review', createdAt: NOW - (1 * ONE_DAY_MS) },
+
   // PP LESSONS (PRACTICE PORTUGUESE) EXAMPLES
   { id: 101, category: 'PP Lessons', pt: 'Estou a fazer progresso todos os dias.', en: 'I am making progress every day.', level: 'Intermediate', verb: 'Fazer', verbEn: 'To make / do', createdAt: NOW - (1 * ONE_DAY_MS) },
   { id: 102, category: 'PP Lessons', pt: 'Preciso de praticar a pronúncia europeia.', en: 'I need to practice European pronunciation.', level: 'Intermediate', verb: 'Precisar', verbEn: 'To need', createdAt: NOW - (3 * ONE_DAY_MS) },
@@ -104,8 +106,6 @@ export default function PortuGeezaApp() {
     if (!saved) return DEFAULT_PHRASE_DATA;
     try {
       const parsed = JSON.parse(saved);
-      
-      // Merge missing default phrases/categories into saved storage
       const existingIds = new Set(parsed.map(item => item.id));
       const newDefaults = DEFAULT_PHRASE_DATA.filter(item => !existingIds.has(item.id));
 
@@ -123,31 +123,25 @@ export default function PortuGeezaApp() {
 
   const [view, setView] = useState('menu'); // 'menu' or 'study'
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [ppTimeFilter, setPpTimeFilter] = useState('fresh'); // 'fresh' (last 7 days) or 'history' (all)
+  const [ppTimeFilter, setPpTimeFilter] = useState('fresh'); // 'fresh' or 'history'
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [shakeDetected, setShakeDetected] = useState(false);
   const [difficultyFilter, setDifficultyFilter] = useState('All');
   
-  // Modal for adding a new phrase from the front end
+  // Front-End Add Form State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newPt, setNewPt] = useState('');
   const [newEn, setNewEn] = useState('');
   const [newVerb, setNewVerb] = useState('');
   const [newVerbEn, setNewVerbEn] = useState('');
-  const [newCategory, setNewCategory] = useState('PP Lessons');
+  const [newCategory, setNewCategory] = useState('Wednesday');
   const [newLevel, setNewLevel] = useState('Intermediate');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
-  // Load SheetJS dynamically for Excel parsing
-  useEffect(() => {
-    if (!window.XLSX) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
+  // Screenshot scanner state
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
 
   // Sync to local storage
   useEffect(() => {
@@ -157,10 +151,10 @@ export default function PortuGeezaApp() {
   const speakPortuguese = (text, e) => {
     if (e) e.stopPropagation();
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Stop any ongoing speech
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'pt-PT'; // European Portuguese accent
-      utterance.rate = 0.85; // Slightly slower for language learners
+      utterance.lang = 'pt-PT';
+      utterance.rate = 0.85;
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -203,32 +197,27 @@ export default function PortuGeezaApp() {
 
   const categories = useMemo(() => {
     const unique = Array.from(new Set(phrases.map(p => p.category)));
-    // Make sure 'PP Lessons' is listed first if present
-    if (unique.includes('PP Lessons')) {
-      return ['PP Lessons', ...unique.filter(c => c !== 'PP Lessons')];
-    }
-    return unique;
+    const priority = ['Wednesday', 'PP Lessons'];
+    const rest = unique.filter(c => !priority.includes(c));
+    const presentPriority = priority.filter(p => unique.includes(p));
+    return [...presentPriority, ...rest];
   }, [phrases]);
 
   const freshPpCount = useMemo(() => {
     const sevenDaysAgo = Date.now() - (7 * ONE_DAY_MS);
-    return phrases.filter(p => p.category === 'PP Lessons' && p.createdAt >= sevenDaysAgo).length;
+    return phrases.filter(p => p.category === 'PP Lessons' && (p.createdAt || 0) >= sevenDaysAgo).length;
   }, [phrases]);
 
   const filteredDeck = useMemo(() => {
     let deck = phrases;
 
-    if (selectedCategory !== 'Random') {
+    if (selectedCategory && selectedCategory !== 'Random') {
       deck = deck.filter(p => p.category === selectedCategory);
     }
 
-    // Special logic for PP Lessons Fresh vs Historical filter
-    if (selectedCategory === 'PP Lessons') {
+    if (selectedCategory === 'PP Lessons' && ppTimeFilter === 'fresh') {
       const sevenDaysAgo = Date.now() - (7 * ONE_DAY_MS);
-      if (ppTimeFilter === 'fresh') {
-        deck = deck.filter(p => p.createdAt >= sevenDaysAgo);
-      }
-      // 'history' includes all PP Lessons
+      deck = deck.filter(p => (p.createdAt || 0) >= sevenDaysAgo);
     }
 
     if (difficultyFilter !== 'All') {
@@ -238,25 +227,6 @@ export default function PortuGeezaApp() {
     return deck;
   }, [phrases, selectedCategory, ppTimeFilter, difficultyFilter]);
 
-  const handleRandomize = () => {
-    if (filteredDeck.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * filteredDeck.length);
-    setCurrentIndex(randomIndex);
-    setIsFlipped(false);
-  };
-
-  const nextCard = () => {
-    if (filteredDeck.length === 0) return;
-    setCurrentIndex((prev) => (prev + 1) % filteredDeck.length);
-    setIsFlipped(false);
-  };
-
-  const prevCard = () => {
-    if (filteredDeck.length === 0) return;
-    setCurrentIndex((prev) => (prev - 1 + filteredDeck.length) % filteredDeck.length);
-    setIsFlipped(false);
-  };
-
   const selectCategory = (cat) => {
     setSelectedCategory(cat);
     setCurrentIndex(0);
@@ -264,88 +234,151 @@ export default function PortuGeezaApp() {
     setView('study');
   };
 
+  const nextCard = () => {
+    if (filteredDeck.length === 0) return;
+    setIsFlipped(false);
+    setCurrentIndex((prev) => (prev + 1) % filteredDeck.length);
+  };
+
+  const prevCard = () => {
+    if (filteredDeck.length === 0) return;
+    setIsFlipped(false);
+    setCurrentIndex((prev) => (prev - 1 + filteredDeck.length) % filteredDeck.length);
+  };
+
+  const handleRandomize = () => {
+    if (filteredDeck.length === 0) return;
+    setIsFlipped(false);
+    const randomIndex = Math.floor(Math.random() * filteredDeck.length);
+    setCurrentIndex(randomIndex);
+  };
+
+  const deleteCurrentCard = (idToDelete, e) => {
+    if (e) e.stopPropagation();
+    if (window.confirm("Delete this flashcard from your deck?")) {
+      const updated = phrases.filter(p => p.id !== idToDelete);
+      setPhrases(updated);
+      
+      if (filteredDeck.length <= 1) {
+        setCurrentIndex(0);
+      } else if (currentIndex >= filteredDeck.length - 1) {
+        setCurrentIndex(filteredDeck.length - 2);
+      }
+      setIsFlipped(false);
+      
+      setToastMessage('Card deleted!');
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+    }
+  };
+
   const handleAddPhrase = (e) => {
     e.preventDefault();
-    if (!newPt.trim() || !newEn.trim()) return;
+    if (!newPt || !newEn) return;
 
-    const createdItem = {
+    const newCard = {
       id: Date.now(),
-      category: newCategory.trim() || 'PP Lessons',
-      pt: newPt.trim(),
-      en: newEn.trim(),
-      verb: newVerb.trim(),
-      verbEn: newVerbEn.trim(),
+      category: newCategory,
+      pt: newPt,
+      en: newEn,
+      verb: newVerb,
+      verbEn: newVerbEn,
       level: newLevel,
-      createdAt: Date.now() // Timestamps phrase as Fresh right now!
+      createdAt: Date.now()
     };
 
-    setPhrases((prev) => [createdItem, ...prev]);
+    setPhrases([newCard, ...phrases]);
 
-    // Reset form fields
+    // Reset inputs
     setNewPt('');
     setNewEn('');
     setNewVerb('');
     setNewVerbEn('');
     setIsAddModalOpen(false);
 
-    // Show toast message
+    setToastMessage(`Saved to ${newCategory}!`);
     setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
-  const handleFileUpload = (e) => {
+  const handleScreenshotUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target.result;
-        if (!window.XLSX) {
-          alert("Excel parser is loading, please try again in 3 seconds.");
-          return;
-        }
-        const wb = window.XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = window.XLSX.utils.sheet_to_json(ws);
+    setIsAnalyzingImage(true);
 
-        const formatted = data.map((item, index) => {
-          let cat = item["Category / Setting"] || item["Category"] || item["category"] || "General";
-          if (cat.toLowerCase().includes("pp") || cat.toLowerCase().includes("practice")) cat = "PP Lessons";
-          else if (cat.includes("Café")) cat = "Café";
-          else if (cat.includes("Bar")) cat = "Bar";
-          else if (cat.includes("Beach")) cat = "Beach";
-          else if (cat.includes("Restaurant")) cat = "Restaurant";
+    try {
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-          return {
-            id: index + 1,
-            category: cat,
-            verb: item["Verb"] || item["verb"] || "",
-            verbEn: item["Verb English"] || item["Verb (English)"] || item["verbEn"] || "",
-            level: item["Level"] || item["level"] || "Easy",
-            pt: item["Portuguese Phrase (European)"] || item["Portuguese"] || item["pt"] || "",
-            en: item["English Meaning"] || item["English"] || item["en"] || "",
-            createdAt: Date.now() // Imported cards start fresh
-          };
-        }).filter(item => item.pt && item.en);
+      const apiKey = "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
-        if (formatted.length > 0) {
-          setPhrases(formatted);
-          alert(`Success! Imported ${formatted.length} phrases from Excel.`);
+      const promptText = `Analyze this screenshot from a translation or language learning app. 
+Extract the primary European Portuguese sentence, its English translation, and the main verb if present.
+Return ONLY a raw JSON object with keys: "pt", "en", "verb", "verbEn". 
+Do NOT include markdown block formatting or backticks.`;
+
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: promptText },
+              {
+                inlineData: {
+                  mimeType: file.type || "image/png",
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ]
+      };
+
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (rawText) {
+        const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+
+        if (parsed.pt && parsed.en) {
+          setNewPt(parsed.pt);
+          setNewEn(parsed.en);
+          setNewVerb(parsed.verb || '');
+          setNewVerbEn(parsed.verbEn || '');
+          setNewCategory('Wednesday');
+          setIsAddModalOpen(true);
+
+          setToastMessage('Screenshot analyzed! Review & save.');
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 3000);
         } else {
-          alert("Could not find valid Portuguese/English columns in Excel.");
+          alert("Could not extract text clearly. Opening manual entry.");
+          setIsAddModalOpen(true);
         }
-      } catch (err) {
-        alert("Error parsing file. Please ensure it is a valid .xlsx or .csv file.");
+      } else {
+        alert("Could not process screenshot. Try manual entry.");
+        setIsAddModalOpen(true);
       }
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const resetDefaultDeck = () => {
-    if (window.confirm("Reset back to default phrases?")) {
-      setPhrases(DEFAULT_PHRASE_DATA);
+    } catch (err) {
+      console.error(err);
+      alert("Error reading screenshot. Opening manual entry.");
+      setIsAddModalOpen(true);
+    } finally {
+      setIsAnalyzingImage(false);
+      e.target.value = '';
     }
   };
 
@@ -359,17 +392,37 @@ export default function PortuGeezaApp() {
           <p className="text-slate-500 text-sm">European Portuguese Companion ({phrases.length} Phrases)</p>
         </header>
 
-        {/* Floating Quick-Add Button for Phone */}
-        <div className="max-w-md mx-auto mb-5">
+        {/* Action Buttons */}
+        <div className="max-w-md mx-auto mb-5 space-y-2">
+          <label className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:from-indigo-700 hover:to-purple-700 transition-all cursor-pointer active:scale-98">
+            {isAnalyzingImage ? (
+              <>
+                <Loader2 size={22} className="animate-spin" /> Scanning Screenshot...
+              </>
+            ) : (
+              <>
+                <Camera size={22} /> Upload Screenshot from App
+              </>
+            )}
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment"
+              onChange={handleScreenshotUpload} 
+              disabled={isAnalyzingImage}
+              className="hidden" 
+            />
+          </label>
+
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-teal-100 hover:from-teal-600 hover:to-emerald-700 transition-all active:scale-98"
+            className="w-full flex items-center justify-center gap-2 bg-white text-teal-700 border border-teal-200 p-3.5 rounded-2xl font-bold shadow-xs hover:bg-teal-50 transition-all active:scale-98 text-sm"
           >
-            <PlusCircle size={22} /> Add New Practice Phrase
+            <PlusCircle size={18} /> Add Phrase Manually
           </button>
         </div>
 
-        {/* Category Selector Grid */}
+        {/* Category Grid */}
         <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
           {categories.map((cat) => (
             <CategoryCard 
@@ -390,51 +443,26 @@ export default function PortuGeezaApp() {
           </button>
         </div>
 
-        {/* Custom Excel Upload & Deck Management */}
-        <div className="mt-8 max-w-md mx-auto bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-          <h3 className="flex items-center gap-2 font-bold mb-2 text-slate-800 text-sm">
-            <Upload size={18} className="text-teal-600" /> Manage Deck (Excel / CSV)
-          </h3>
-          <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-            Import an Excel sheet or reset your default phrases. Your phrases stay saved in your phone browser!
-          </p>
-          
-          <div className="flex gap-2">
-            <label className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-3 px-4 rounded-xl cursor-pointer transition-colors border border-slate-200">
-              <FolderPlus size={16} /> Import Excel
-              <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" />
-            </label>
-
-            <button 
-              onClick={resetDefaultDeck}
-              className="flex items-center gap-1 bg-rose-50 text-rose-600 font-bold text-xs py-3 px-3 rounded-xl hover:bg-rose-100 border border-rose-100 transition-colors"
-              title="Reset to default deck"
-            >
-              <RefreshCw size={14} /> Reset
-            </button>
-          </div>
-        </div>
-
-        {/* Tip Box */}
+        {/* Info Box */}
         <div className="mt-4 max-w-md mx-auto bg-teal-50/80 border border-teal-100 p-4 rounded-2xl text-teal-800 text-xs flex items-start gap-2.5">
           <Info size={18} className="mt-0.5 shrink-0 text-teal-600" />
-          <span>Tap <strong>"+ Add New Practice Phrase"</strong> whenever you learn a new sentence on Practice Portuguese to build your custom deck!</span>
+          <span>Upload screenshots or tap <strong>"Add Phrase Manually"</strong> to build your custom flashcard deck on your phone!</span>
         </div>
 
         {/* Success Toast */}
         {showSuccessToast && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-bounce z-50">
-            <Check size={16} /> Added phrase to PP Lessons!
+            <Check size={16} /> {toastMessage || 'Added phrase!'}
           </div>
         )}
 
-        {}
+        {/* Add Modal */}
         {isAddModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-4 z-50">
             <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <PlusCircle size={20} className="text-teal-600" /> Add Practice Phrase
+                  <PlusCircle size={20} className="text-teal-600" /> Add New Phrase
                 </h3>
                 <button onClick={() => setIsAddModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full">
                   <X size={20} />
@@ -442,6 +470,27 @@ export default function PortuGeezaApp() {
               </div>
 
               <form onSubmit={handleAddPhrase} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                  >
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="PP Lessons">PP Lessons</option>
+                    <option value="Café">Café</option>
+                    <option value="Bar">Bar</option>
+                    <option value="Beach">Beach</option>
+                    <option value="Restaurant">Restaurant</option>
+                    <option value="Gym">Gym</option>
+                    <option value="Social">Social</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Help">Help</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">Portuguese Phrase (European)</label>
                   <input
@@ -490,40 +539,6 @@ export default function PortuGeezaApp() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Category</label>
-                    <select
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                    >
-                      <option value="PP Lessons">PP Lessons</option>
-                      <option value="Café">Café</option>
-                      <option value="Bar">Bar</option>
-                      <option value="Beach">Beach</option>
-                      <option value="Restaurant">Restaurant</option>
-                      <option value="Gym">Gym</option>
-                      <option value="Social">Social</option>
-                      <option value="Transport">Transport</option>
-                      <option value="Shopping">Shopping</option>
-                      <option value="Help">Help</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Difficulty</label>
-                    <select
-                      value={newLevel}
-                      onChange={(e) => setNewLevel(e.target.value)}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                    >
-                      <option value="Easy">Easy</option>
-                      <option value="Intermediate">Intermediate</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div className="pt-2 flex gap-2">
                   <button
                     type="button"
@@ -553,22 +568,35 @@ export default function PortuGeezaApp() {
     <div className={`min-h-screen p-6 font-sans transition-colors duration-300 ${shakeDetected ? 'bg-teal-100' : 'bg-slate-50'}`}>
       <div className="max-w-md mx-auto flex flex-col h-full min-h-[85vh]">
         
-        {/* Top Navigation Bar */}
+        {/* Top Header */}
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => setView('menu')} className="p-2.5 bg-white rounded-2xl shadow-sm border border-slate-100 text-slate-600 active:scale-95 transition-transform">
             <ChevronLeft size={20} />
           </button>
           <div className="flex flex-col items-center">
             <span className="font-bold text-slate-800 text-base flex items-center gap-1.5">
+              {selectedCategory === 'Wednesday' && <Calendar size={16} className="text-indigo-600" />}
               {selectedCategory === 'PP Lessons' && <Sparkles size={16} className="text-purple-600" />}
               {selectedCategory === 'Random' ? 'Global Shuffle' : selectedCategory}
             </span>
             <span className="text-xs text-slate-400 font-medium">Card {filteredDeck.length > 0 ? currentIndex + 1 : 0} of {filteredDeck.length}</span>
           </div>
-          <div className="w-10"></div>
+
+          {/* Delete Button */}
+          {activeCard ? (
+            <button 
+              onClick={(e) => deleteCurrentCard(activeCard.id, e)}
+              className="p-2.5 bg-rose-50 text-rose-500 rounded-2xl border border-rose-100 active:scale-95 transition-transform hover:bg-rose-100"
+              title="Delete this card"
+            >
+              <Trash2 size={18} />
+            </button>
+          ) : (
+            <div className="w-10"></div>
+          )}
         </div>
 
-        {/* Special PP Lessons Time Filter Tabs (Fresh vs Historical) */}
+        {/* Time Filter Tabs for PP Lessons */}
         {selectedCategory === 'PP Lessons' && (
           <div className="flex bg-purple-100/70 p-1 rounded-2xl mb-4 border border-purple-200/50">
             <button
@@ -586,7 +614,7 @@ export default function PortuGeezaApp() {
           </div>
         )}
 
-        {/* Difficulty Selector */}
+        {/* Difficulty Filter */}
         <div className="flex bg-slate-200/80 p-1 rounded-2xl mb-6">
           {['All', 'Easy', 'Intermediate'].map((lvl) => (
             <button
@@ -611,7 +639,6 @@ export default function PortuGeezaApp() {
               <div className="absolute inset-0 bg-white border-2 border-slate-100 rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 backface-hidden">
                 <span className="absolute top-5 left-5 text-[10px] font-black uppercase tracking-widest text-teal-600 bg-teal-50 px-2.5 py-1 rounded-lg">Portugal</span>
                 
-                {/* Audio Pronunciation Button */}
                 <button 
                   onClick={(e) => speakPortuguese(activeCard?.pt, e)}
                   className="absolute top-4 right-4 p-2.5 bg-teal-50 text-teal-600 rounded-2xl hover:bg-teal-100 active:scale-90 transition-all shadow-sm"
@@ -650,12 +677,9 @@ export default function PortuGeezaApp() {
           </div>
         ) : (
           <div className="flex-grow flex flex-col items-center justify-center bg-white rounded-3xl p-8 text-center border border-slate-200">
-            <p className="text-slate-600 text-sm font-semibold mb-2">No phrases found in this filter.</p>
-            {selectedCategory === 'PP Lessons' && ppTimeFilter === 'fresh' ? (
-              <p className="text-xs text-slate-400 mb-4">No new phrases added in the last 7 days.</p>
-            ) : null}
-            <button onClick={() => { setDifficultyFilter('All'); setPpTimeFilter('history'); }} className="text-xs bg-teal-50 text-teal-600 font-bold px-4 py-2 rounded-xl">
-              Show All Historical Phrases
+            <p className="text-slate-600 text-sm font-semibold mb-2">No phrases found in this category.</p>
+            <button onClick={() => setView('menu')} className="text-xs bg-teal-50 text-teal-600 font-bold px-4 py-2 rounded-xl mt-2">
+              Back to Menu
             </button>
           </div>
         )}
@@ -706,6 +730,7 @@ function CategoryCard({ label, badge, icon, color, onClick }) {
 
 function getCategoryIcon(cat) {
   switch (cat) {
+    case 'Wednesday': return <Calendar size={24} />;
     case 'PP Lessons': return <Sparkles size={24} />;
     case 'Café': return <Coffee size={24} />;
     case 'Bar': return <Beer size={24} />;
@@ -721,6 +746,7 @@ function getCategoryIcon(cat) {
 
 function getCategoryColor(cat) {
   switch (cat) {
+    case 'Wednesday': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
     case 'PP Lessons': return 'bg-purple-100 text-purple-700 border-purple-200';
     case 'Café': return 'bg-orange-100 text-orange-600';
     case 'Bar': return 'bg-yellow-100 text-yellow-700';
